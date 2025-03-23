@@ -57,7 +57,7 @@ const msalClient = new ConfidentialClientApplication(msalConfig);
 const msGraphScopes = ['offline_access', 'Notes.Read', 'User.Read']; 
 
 // Redirect URI for authentication
-const REDIRECT_URI = process.env.REDIRECT_URI || `http://localhost:${process.env.PORT || 3000}/auth/callback`;
+const REDIRECT_URI = process.env.REDIRECT_URI || `https://autoanki.fly.dev/auth/callback`;
 
 // Initialize Gemini API
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY);
