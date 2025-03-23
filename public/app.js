@@ -17,19 +17,37 @@ let isAuthenticated = false;
 
 // Initialize the application
 async function init() {
-try {
-    // Check authentication status
-    await checkAuthStatus();
+  console.log('Initializing application...');
+  try {
+    // Check authentication status first
+    console.log('Checking authentication status...');
+    const authData = await checkAuthStatus();
+    console.log(`Authentication status: ${isAuthenticated ? 'Authenticated' : 'Not authenticated'}`);
+
+    // We'll set this explicitly to ensure it's correctly updated
+    isAuthenticated = authData.authenticated;
+    userName = authData.userName || '';
     
+    // Update UI explicitly
+    updateAuthUI();
+
     // Setup event listeners
+    console.log('Setting up event listeners...');
     setupEventListeners();
-    
-    // Load user's last selection if available
-    loadLastSelection();
-} catch (error) {
+
+    // If authenticated, load content
+    if (isAuthenticated) {
+      console.log('User is authenticated, loading user data...');
+      await loadUserData();
+    } else {
+      console.log('User is not authenticated, displaying login screen');
+    }
+
+    console.log('Initialization complete');
+  } catch (error) {
     console.error('Initialization error:', error);
     showNotification('Error initializing app. Please refresh the page.', true);
-}
+  }
 }
 
 // Check if user is authenticated
@@ -62,42 +80,72 @@ async function checkAuthStatus() {
 }
 
 // Update UI based on authentication status
-function updateAuthUI(authenticated, userName = '') {
-const authStatus = document.getElementById('auth-status');
-const userInfo = document.getElementById('user-info');
-const loginButton = document.getElementById('login-button');
-const logoutButton = document.getElementById('logout-button');
-
-// Update header display
-const header = document.querySelector('.app-header');
-if (header) {
-    header.style.display = authenticated ? 'block' : 'none';
-}
-
-// Update login view display
-const loginView = document.getElementById('login-view');
-if (loginView) {
-    loginView.style.display = authenticated ? 'none' : 'block';
-}
-
-// Update content view display
-const contentView = document.getElementById('content-view');
-if (contentView) {
-    contentView.style.display = authenticated ? 'block' : 'none';
-}
-
-// Update navigation elements
-if (authenticated) {
-    if (authStatus) authStatus.textContent = 'Signed In';
-    if (userInfo) userInfo.textContent = userName;
+function updateAuthUI() {
+  console.log(`Updating UI based on authentication status: ${isAuthenticated}`);
+  
+  // Select elements directly rather than using cached references
+  const loginSection = document.getElementById('login-view');
+  const contentSection = document.getElementById('content-view');
+  const loginButton = document.getElementById('login-button');
+  const logoutButton = document.getElementById('logout-button');
+  const userInfoElement = document.getElementById('user-info');
+  const authStatusElement = document.getElementById('auth-status');
+  
+  if (isAuthenticated) {
+    console.log('User is authenticated, showing content view');
+    
+    // Show header if hidden
+    const header = document.querySelector('.app-header');
+    if (header) {
+      header.style.display = 'block';
+      console.log('Header display set to block');
+    }
+    
+    if (loginSection) {
+      loginSection.style.display = 'none';
+      console.log('Login view hidden');
+    } else {
+      console.error('Login section element not found');
+    }
+    
+    if (contentSection) {
+      contentSection.style.display = 'block';
+      console.log('Content view shown');
+    } else {
+      console.error('Content section element not found');
+    }
+    
     if (loginButton) loginButton.style.display = 'none';
     if (logoutButton) logoutButton.style.display = 'block';
-} else {
-    if (authStatus) authStatus.textContent = 'Not Signed In';
-    if (userInfo) userInfo.textContent = '';
+    if (userInfoElement) userInfoElement.textContent = userName || 'User';
+    if (authStatusElement) authStatusElement.textContent = 'Signed In';
+  } else {
+    console.log('User is not authenticated, showing login view');
+    
+    if (loginSection) {
+      loginSection.style.display = 'block';
+      console.log('Login view shown');
+    } else {
+      console.error('Login section element not found');
+    }
+    
+    if (contentSection) {
+      contentSection.style.display = 'none';
+      console.log('Content view hidden');
+    } else {
+      console.error('Content section element not found');
+    }
+    
     if (loginButton) loginButton.style.display = 'block';
     if (logoutButton) logoutButton.style.display = 'none';
-}
+    if (userInfoElement) userInfoElement.textContent = '';
+    if (authStatusElement) authStatusElement.textContent = 'Not Signed In';
+  }
+  
+  // Force a browser reflow to update UI
+  document.body.offsetHeight;
+  
+  console.log('UI update complete');
 }
 
 // Load user data (notebooks)
