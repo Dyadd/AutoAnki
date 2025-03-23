@@ -1,0 +1,36 @@
+{
+  "name": "onenote-to-anki-converter",
+  "version": "1.0.0",
+  "description": "Convert OneNote pages to Anki-compatible flashcard decks",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "keywords": [
+    "onenote",
+    "anki",
+    "flashcards",
+    "ai",
+    "learning"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@azure/msal-node": "^3.4.0",
+    "@google/generative-ai": "^0.24.0",
+    "anki-apkg-export": "^4.0.3",
+    "axios": "^1.8.4",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "express-session": "^1.18.1",
+    "jsdom": "^26.0.0",
+    "uuid": "^11.1.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
