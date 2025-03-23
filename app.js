@@ -23,8 +23,10 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Set up session management
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
 
+app.set('trust proxy', 1); // trust first proxy
+
 app.use(session({
-  secret: SESSION_SECRET,
+  secret: process.env.SESSION_SECRET || 'onenote-flashcards-secret',
   resave: false,
   saveUninitialized: false,
   cookie: { 
@@ -373,6 +375,13 @@ app.get('/auth/signin', async (req, res) => {
 
 app.get('/auth/callback', async (req, res) => {
   try {
+    console.log('Auth callback received', {
+      code: req.query.code ? 'present' : 'missing',
+      state: req.query.state,
+      session: req.session ? 'present' : 'missing',
+      sessionId: req.sessionID
+    });
+
     // Exchange code for token
     const tokenRequest = {
       code: req.query.code,
@@ -381,6 +390,7 @@ app.get('/auth/callback', async (req, res) => {
     };
     
     const response = await msalClient.acquireTokenByCode(tokenRequest);
+    console.log('Token acquired successfully');
     
     // Save tokens in session
     req.session.accessToken = response.accessToken;
@@ -393,14 +403,28 @@ app.get('/auth/callback', async (req, res) => {
     req.session.userEmail = userInfo.mail || userInfo.userPrincipalName;
     req.session.userName = userInfo.displayName;
     
-    // Redirect to original destination or home page
-    const returnUrl = req.session.returnTo || '/';
-    delete req.session.returnTo;
-    
-    res.redirect(returnUrl);
+    console.log('Session updated with user info', {
+      userId: userInfo.id,
+      email: req.session.userEmail,
+      sessionId: req.sessionID
+    });
+
+    // Save session explicitly
+    req.session.save((err) => {
+      if (err) {
+        console.error('Error saving session:', err);
+      }
+      
+      // Redirect to original destination or home page
+      const returnUrl = req.session.returnTo || '/';
+      delete req.session.returnTo;
+      
+      console.log('Redirecting to:', returnUrl);
+      res.redirect(returnUrl);
+    });
   } catch (error) {
     console.error('Authentication error:', error);
-    res.status(500).send('Authentication failed');
+    res.status(500).send('Authentication failed. Please try again.');
   }
 });
 
