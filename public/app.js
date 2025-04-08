@@ -568,51 +568,87 @@ async function generateAnkiDeck() {
   }
 
   isGenerating = true;
-  showLoading('Generating Anki deck...');
-  updateProgress(5);
-
+  showLoading('Starting Anki deck generation...');
+  updateProgress(0);
+  
+  // Create progress details element if it doesn't exist
+  let progressDetails = document.getElementById('progress-details');
+  if (!progressDetails) {
+    progressDetails = document.createElement('div');
+    progressDetails.id = 'progress-details';
+    progressDetails.className = 'progress-details mt-2 text-center small';
+    document.getElementById('loading-indicator').appendChild(progressDetails);
+  }
+  
+  // Create progress percentage element if it doesn't exist
+  let progressPercentage = document.querySelector('.progress-percentage');
+  if (!progressPercentage) {
+    progressPercentage = document.createElement('div');
+    progressPercentage.className = 'progress-percentage';
+    document.querySelector('.progress').appendChild(progressPercentage);
+  }
+  
+  progressDetails.innerHTML = 'Initializing...';
+  progressPercentage.textContent = '0%';
+  
   try {
     // Get section name for deck title
     const sectionName = document.querySelector('#section-select option:checked').textContent || 'OneNote';
     
-    updateProgress(10);
+    // Setup EventSource for server-sent events
+    const eventSource = new EventSource(`/api/anki/generate/stream?sectionId=${currentSectionId}&sectionName=${encodeURIComponent(sectionName)}&pageIds=${selectedPageIds.join(',')}`);
     
-    const response = await fetch('/api/anki/generate', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        sectionId: currentSectionId,
-        sectionName,
-        pageIds: selectedPageIds,
-        preferences: cardPreferences
-      })
-    });
+    // Track cards as they're generated
+    let cardCount = 0;
     
-    updateProgress(30);
+    eventSource.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      
+      if (data.error) {
+        showNotification(data.error, true);
+        eventSource.close();
+        isGenerating = false;
+        hideLoading();
+        return;
+      }
+      
+      if (data.stage) {
+        updateProgress(data.progress);
+        progressDetails.innerHTML = data.message;
+        progressPercentage.textContent = `${Math.floor(data.progress)}%`;
+        
+        // Track card count
+        if (data.stage === 'page_complete' && data.cardCount) {
+          cardCount += data.cardCount;
+          progressDetails.innerHTML += `<br>Total cards so far: ${cardCount}`;
+        }
+      }
+      
+      if (data.complete) {
+        eventSource.close();
+        
+        if (data.success && data.downloadUrl) {
+          // Show success message with download button
+          showDownloadNotification(data.downloadUrl, data.deckName, data.totalCards);
+        } else {
+          showNotification('Failed to generate deck. Please try again.', true);
+        }
+        
+        hideLoading();
+        isGenerating = false;
+      }
+    };
     
-    if (!response.ok) {
-      throw new Error(`Generation failed: ${response.status}`);
-    }
+    eventSource.onerror = () => {
+      eventSource.close();
+      showNotification('Error generating Anki deck. Please try again.', true);
+      hideLoading();
+      isGenerating = false;
+    };
     
-    updateProgress(90);
-    
-    // Get the download URL from the response
-    const result = await response.json();
-    
-    if (result.success && result.downloadUrl) {
-      // Show success message with download button
-      showDownloadNotification(result.downloadUrl, result.deckName, result.totalCards);
-    } else {
-      showNotification('Failed to generate deck. Please try again.', true);
-    }
-    
-    updateProgress(100);
   } catch (error) {
     console.error('Error generating Anki deck:', error);
     showNotification('Error generating Anki deck. Please try again.', true);
-  } finally {
     hideLoading();
     isGenerating = false;
   }
@@ -729,6 +765,11 @@ function updateProgress(percent) {
   if (progressBar) {
     progressBar.style.width = `${percent}%`;
     progressBar.setAttribute('aria-valuenow', percent);
+  }
+  
+  const progressPercentage = document.querySelector('.progress-percentage');
+  if (progressPercentage) {
+    progressPercentage.textContent = `${Math.floor(percent)}%`;
   }
 }
 

@@ -444,3 +444,37 @@ body.dark-mode .form-check-input {
   background-color: #444;
   border-color: #555;
 }
+
+/* Progress Details Styles - Add these new styles below */
+.progress-details {
+  margin-top: 1rem;
+  font-size: 0.875rem;
+  color: var(--text-light);
+  max-width: 80%;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.progress-stage {
+  font-weight: 500;
+  margin-right: 0.5rem;
+}
+
+.progress-bar-container {
+  position: relative;
+}
+
+.progress-percentage {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 0.75rem;
+  color: white;
+  font-weight: 500;
+  text-shadow: 0 0 2px rgba(0,0,0,0.5);
+}
+
+body.dark-mode .progress-details {
+  color: #adb5bd;
+}

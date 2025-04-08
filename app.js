@@ -798,8 +798,53 @@ async function generateAnkiPackage(deckName, flashcards) {
     // Create a new Anki package
     const apkg = new AnkiExport(deckName);
     
-    // Add card models for different card types
-    // Cloze model is built-in to Anki
+    // Add media files first (for all the images referenced in flashcards)
+    const processedMediaFiles = new Set();
+    
+    // Process all flashcards to extract and add media
+    for (const card of flashcards) {
+      // Handle images in notes
+      if (card.notes) {
+        const imageMatches = card.notes.match(/!\[.*?\]\((.*?)\)/g) || [];
+        
+        for (const imgMatch of imageMatches) {
+          const imgPath = imgMatch.match(/!\[.*?\]\((.*?)\)/)[1];
+          if (imgPath && !processedMediaFiles.has(imgPath)) {
+            // Extract filename from path
+            const filename = path.basename(imgPath);
+            
+            // Get the full path to the image
+            const fullImagePath = path.join(__dirname, 'public', imgPath);
+            
+            if (fs.existsSync(fullImagePath)) {
+              // Add the media file to the package
+              const imageData = fs.readFileSync(fullImagePath);
+              apkg.addMedia(filename, imageData);
+              processedMediaFiles.add(imgPath);
+              
+              // Replace path in notes to use just the filename (Anki's media folder format)
+              card.notes = card.notes.replace(imgPath, filename);
+            }
+          }
+        }
+      }
+      
+      // Handle related images separately if they exist
+      if (card.relatedImages && Array.isArray(card.relatedImages)) {
+        for (const imgPath of card.relatedImages) {
+          if (imgPath && !processedMediaFiles.has(imgPath)) {
+            const filename = path.basename(imgPath);
+            const fullImagePath = path.join(__dirname, 'public', imgPath);
+            
+            if (fs.existsSync(fullImagePath)) {
+              const imageData = fs.readFileSync(fullImagePath);
+              apkg.addMedia(filename, imageData);
+              processedMediaFiles.add(imgPath);
+            }
+          }
+        }
+      }
+    }
     
     // Add each flashcard
     for (const card of flashcards) {
@@ -810,27 +855,40 @@ async function generateAnkiPackage(deckName, flashcards) {
       
       if (card.type === 'cloze') {
         // Handle cloze deletion cards
-        // Anki uses {{c1::text}} format for clozes
+        // Make sure clozeText uses Anki's {{c1::text}} format
         let clozeText = card.text;
         
         // Convert any other cloze format to Anki's format if needed
-        // e.g., [cloze:text] to {{c1::text}}
         if (!clozeText.includes('{{c')) {
           clozeText = clozeText.replace(/\[cloze:(.*?)\]/g, '{{c1::$1}}');
         }
         
-        // Add cloze card to deck
+        // Add cloze card with proper model name and fields
         apkg.addCard(
-          clozeText,
-          '', // Answer field is not used for cloze cards
-          { tags, modelName: 'Cloze', fields: { Text: clozeText, Extra: card.notes || '' } }
+          '', // Front field isn't used directly for cloze cards
+          '', // Back field isn't used directly for cloze cards
+          { 
+            tags, 
+            modelName: 'Cloze', 
+            fields: { 
+              Text: clozeText, 
+              Extra: card.notes || '' 
+            } 
+          }
         );
       } else {
-        // Add standard question/answer cards
+        // Add standard question/answer cards with notes field
         apkg.addCard(
-          `<div class="question">${card.question}</div>`,
-          `<div class="answer">${card.answer}</div>`,
-          { tags, notes: card.notes || '' }
+          card.question,
+          card.answer,
+          { 
+            tags, 
+            modelName: 'Basic', 
+            fields: {
+              Front: card.question,
+              Back: card.answer + (card.notes ? `\n\n${card.notes}` : '')
+            }
+          }
         );
       }
     }
@@ -1081,6 +1139,151 @@ app.post('/api/anki/generate', ensureAuthenticated, async (req, res) => {
   } catch (error) {
     console.error('Error generating Anki deck:', error);
     res.status(500).json({ error: 'Failed to generate Anki deck' });
+  }
+});
+
+// After the existing `/api/anki/generate` route
+app.get('/api/anki/generate/stream', ensureAuthenticated, async (req, res) => {
+  try {
+    const { sectionId, sectionName } = req.query;
+    const pageIds = req.query.pageIds.split(',');
+    
+    if (!sectionId || !pageIds || !Array.isArray(pageIds) || pageIds.length === 0) {
+      return res.status(400).json({ error: 'Invalid request parameters' });
+    }
+    
+    // Set up SSE (Server-Sent Events) for progress updates
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    
+    // Helper function to send progress updates
+    const sendProgress = (stage, progress, message, extraData = {}) => {
+      res.write(`data: ${JSON.stringify({
+        stage,
+        progress,
+        message,
+        ...extraData
+      })}\n\n`);
+    };
+    
+    // Track progress
+    let currentPage = 0;
+    const totalPages = pageIds.length;
+    let allFlashcards = [];
+    let totalCardCount = 0;
+    
+    // Initial progress update
+    sendProgress('initializing', 0, 'Starting deck generation...');
+    
+    // Process each page
+    for (const pageId of pageIds) {
+      currentPage++;
+      
+      try {
+        // Get page info
+        sendProgress('loading', Math.floor((currentPage - 0.7) / totalPages * 100), 
+          `Loading page ${currentPage} of ${totalPages}...`);
+        
+        const pages = await getOneNotePages(req, sectionId);
+        const pageInfo = pages.find(p => p.id === pageId);
+        
+        if (!pageInfo) {
+          console.warn(`Page ${pageId} not found, skipping...`);
+          continue;
+        }
+        
+        const pageTitle = pageInfo.title;
+        
+        // Extract content
+        sendProgress('extracting', Math.floor((currentPage - 0.5) / totalPages * 100), 
+          `Extracting content from "${pageTitle}"...`);
+        
+        const htmlContent = await getPageContent(req, pageId);
+        const extractedContent = await extractContentFromOneNoteHtml(req, htmlContent, pageId);
+        
+        // Process images
+        sendProgress('processing_images', Math.floor((currentPage - 0.3) / totalPages * 100), 
+          `Processing images from "${pageTitle}"...`);
+        
+        const processedImages = await processImagesWithAI(extractedContent.images, pageTitle);
+        
+        // Generate concept map
+        sendProgress('generating_map', Math.floor((currentPage - 0.2) / totalPages * 100), 
+          `Creating concept map for "${pageTitle}"...`);
+        
+        const conceptMap = await generateConceptMap(extractedContent.text, pageTitle);
+        
+        // Extract flashcards
+        sendProgress('creating_cards', Math.floor((currentPage - 0.1) / totalPages * 100), 
+          `Generating flashcards for "${pageTitle}"...`);
+        
+        const flashcards = await extractFlashcardsWithAI(
+          extractedContent.text, 
+          pageTitle, 
+          conceptMap,
+          processedImages
+        );
+        
+        // Add page flashcards to collection
+        const formattedPageTag = pageTitle
+          .toLowerCase()
+          .replace(/[^a-z0-9]/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_|_$/g, '');
+        
+        const pageFlashcards = flashcards.map(card => ({
+          ...card,
+          tags: [...(card.tags || []), formattedPageTag],
+          sourcePageTitle: pageTitle,
+          sourcePageId: pageId
+        }));
+        
+        allFlashcards = [...allFlashcards, ...pageFlashcards];
+        totalCardCount += pageFlashcards.length;
+        
+        // Update on page completion
+        sendProgress('page_complete', Math.floor(currentPage / totalPages * 100), 
+          `Completed ${currentPage} of ${totalPages} pages (${pageFlashcards.length} cards)`, 
+          { cardCount: pageFlashcards.length });
+      } catch (error) {
+        console.error(`Error processing page ${pageId}:`, error);
+        sendProgress('page_error', Math.floor(currentPage / totalPages * 100), 
+          `Error on page ${currentPage}. Continuing with remaining pages...`);
+      }
+    }
+    
+    // Generate deck name
+    sendProgress('packaging', 95, `Creating Anki package with ${totalCardCount} flashcards...`);
+    
+    const deckName = `${sectionName.replace(/[^a-zA-Z0-9 ]/g, '')}_${new Date().toISOString().split('T')[0]}`;
+    
+    // Generate Anki package
+    const { filePath, filename } = await generateAnkiPackage(deckName, allFlashcards);
+    
+    // Return download URL
+    const downloadUrl = `/download/${filename}`;
+    
+    sendProgress('complete', 100, 'Deck generation complete!');
+    
+    // Send final response
+    res.write(`data: ${JSON.stringify({
+      complete: true,
+      success: true,
+      totalPages,
+      totalCards: allFlashcards.length,
+      downloadUrl,
+      deckName
+    })}\n\n`);
+    
+    res.end();
+  } catch (error) {
+    console.error('Error generating Anki deck:', error);
+    res.write(`data: ${JSON.stringify({
+      error: 'Failed to generate Anki deck',
+      complete: true
+    })}\n\n`);
+    res.end();
   }
 });
 
