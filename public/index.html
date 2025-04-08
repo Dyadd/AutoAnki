@@ -29,6 +29,12 @@
                                     <span>Convert</span>
                                 </a>
                             </li>
+                            <li class="nav-item" id="nav-settings">
+                                <a href="#" data-view="settings">
+                                    <i class="bi bi-gear"></i>
+                                    <span>Settings</span>
+                                </a>
+                            </li>
                             <li class="nav-item" id="nav-help">
                                 <a href="#" data-view="help">
                                     <i class="bi bi-question-circle"></i>
@@ -98,11 +104,35 @@
                                     <div class="col-md-6">
                                         <div class="d-flex">
                                             <div class="me-3">
-                                                <i class="bi bi-download text-primary fs-3"></i>
+                                                <i class="bi bi-card-text text-primary fs-3"></i>
                                             </div>
                                             <div>
-                                                <h6>Export to Anki</h6>
-                                                <p class="text-muted small">Download ready-to-use .apkg files</p>
+                                                <h6>Multiple Card Types</h6>
+                                                <p class="text-muted small">Cloze deletions, Q&A, and process cards</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <div class="d-flex">
+                                            <div class="me-3">
+                                                <i class="bi bi-images text-primary fs-3"></i>
+                                            </div>
+                                            <div>
+                                                <h6>Image Support</h6>
+                                                <p class="text-muted small">Process images, diagrams and drawings</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="col-md-6">
+                                        <div class="d-flex">
+                                            <div class="me-3">
+                                                <i class="bi bi-diagram-3 text-primary fs-3"></i>
+                                            </div>
+                                            <div>
+                                                <h6>Concept Mapping</h6>
+                                                <p class="text-muted small">See relationships between concepts</p>
                                             </div>
                                         </div>
                                     </div>
@@ -156,12 +186,53 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5><i class="bi bi-card-list me-2"></i>Card Types</h5>
+                        </div>
+                        <div class="card-body">
+                            <form id="card-type-preferences">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="enable-cloze" checked>
+                                    <label class="form-check-label" for="enable-cloze">
+                                        <strong>Cloze Deletion Cards</strong>
+                                        <small class="d-block text-muted">Hide key terms within context</small>
+                                    </label>
+                                </div>
+                                
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="enable-standard" checked>
+                                    <label class="form-check-label" for="enable-standard">
+                                        <strong>Standard Q&A Cards</strong>
+                                        <small class="d-block text-muted">Traditional question and answer format</small>
+                                    </label>
+                                </div>
+                                
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" id="enable-process" checked>
+                                    <label class="form-check-label" for="enable-process">
+                                        <strong>Process Cards</strong>
+                                        <small class="d-block text-muted">Test steps and sequences</small>
+                                    </label>
+                                </div>
+                                
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="enable-concept-map" checked>
+                                    <label class="form-check-label" for="enable-concept-map">
+                                        <strong>Include Concept Maps</strong>
+                                        <small class="d-block text-muted">Add concept relationships to cards</small>
+                                    </label>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
                 </div>
                 
                 <div class="col-lg-8">
                     <div class="card">
                         <div class="card-header d-flex justify-content-between align-items-center">
-                            <h5><i class="bi bi-card-list me-2"></i>Pages</h5>
+                            <h5><i class="bi bi-file-earmark-text me-2"></i>Pages</h5>
                             <button id="generate-button" class="btn btn-success" disabled>
                                 <i class="bi bi-file-earmark-arrow-down me-1"></i>Generate Anki Deck
                             </button>
@@ -173,11 +244,12 @@
                                     <div class="spinner-border text-primary me-2" role="status">
                                         <span class="visually-hidden">Loading...</span>
                                     </div>
-                                    <span>Processing...</span>
+                                    <span class="loading-message">Processing...</span>
                                 </div>
                                 
                                 <div class="progress mt-3">
-                                    <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" style="width: 0%"></div>
+                                    <div id="progress-bar" class="progress-bar progress-bar-striped progress-bar-animated" 
+                                         role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100" style="width: 0%"></div>
                                 </div>
                             </div>
                             
@@ -187,6 +259,102 @@
                                     <i class="bi bi-info-circle me-2"></i>Select a notebook and section, then click "Scan Pages"
                                 </li>
                             </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Settings View -->
+        <div id="settings-view" class="app-view container" style="display: none;">
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5><i class="bi bi-gear me-2"></i>Settings</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6 class="mb-3">Card Generation</h6>
+                                    
+                                    <div class="mb-3">
+                                        <label for="max-cards-per-page" class="form-label">Maximum cards per page:</label>
+                                        <select id="max-cards-per-page" class="form-select">
+                                            <option value="5">5 cards</option>
+                                            <option value="10" selected>10 cards</option>
+                                            <option value="15">15 cards</option>
+                                            <option value="20">20 cards</option>
+                                            <option value="25">25 cards</option>
+                                            <option value="0">No limit</option>
+                                        </select>
+                                        <div class="form-text">Limit the number of cards generated per page</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label for="card-complexity" class="form-label">Card complexity:</label>
+                                        <select id="card-complexity" class="form-select">
+                                            <option value="basic">Basic - Simpler cards</option>
+                                            <option value="standard" selected>Standard - Balanced complexity</option>
+                                            <option value="advanced">Advanced - More detailed cards</option>
+                                        </select>
+                                        <div class="form-text">Control the complexity of generated cards</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <h6 class="mb-3">Appearance</h6>
+                                    
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="dark-mode">
+                                        <label class="form-check-label" for="dark-mode">Dark mode</label>
+                                    </div>
+                                    
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="enable-animations" checked>
+                                        <label class="form-check-label" for="enable-animations">Enable animations</label>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <hr>
+                            
+                            <h6 class="mb-3">Advanced Options</h6>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="process-images" checked>
+                                        <label class="form-check-label" for="process-images">Process images and diagrams</label>
+                                        <div class="form-text">Extract information from images using AI</div>
+                                    </div>
+                                    
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="generate-concept-maps" checked>
+                                        <label class="form-check-label" for="generate-concept-maps">Generate concept maps</label>
+                                        <div class="form-text">Create concept maps to show relationships between ideas</div>
+                                    </div>
+                                </div>
+                                
+                                <div class="col-md-6">
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="use-original-text" checked>
+                                        <label class="form-check-label" for="use-original-text">Use original text</label>
+                                        <div class="form-text">Prioritize using the exact phrasing from your notes</div>
+                                    </div>
+                                    
+                                    <div class="form-check form-switch mb-3">
+                                        <input class="form-check-input" type="checkbox" id="include-metadata" checked>
+                                        <label class="form-check-label" for="include-metadata">Include metadata</label>
+                                        <div class="form-text">Add source page and concept information to cards</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="mt-3 d-flex justify-content-end">
+                                <button id="save-settings" class="btn btn-primary">
+                                    <i class="bi bi-save me-1"></i>Save Settings
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -209,9 +377,66 @@
                                     <li>Select a OneNote notebook and section</li>
                                     <li>Click "Scan Pages" to view available pages</li>
                                     <li>Select the pages you want to convert</li>
+                                    <li>Choose your preferred card types in the sidebar</li>
                                     <li>Click "Generate Anki Deck" to create and download your flashcards</li>
                                     <li>Import the downloaded .apkg file into Anki</li>
                                 </ol>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <h5>Understanding Card Types</h5>
+                                
+                                <div class="card mb-3">
+                                    <div class="card-body">
+                                        <h6><i class="bi bi-square me-2"></i>Cloze Deletion Cards</h6>
+                                        <p>Cloze deletion cards hide key terms or phrases within the original context of your notes. This helps you learn concepts in context rather than in isolation.</p>
+                                        <div class="alert alert-light">
+                                            <strong>Example:</strong><br>
+                                            <p>Peristaltic contractions move from <span class="text-danger">[...]</span> to large intestine and are initiated by <span class="text-danger">[...]</span>.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="card mb-3">
+                                    <div class="card-body">
+                                        <h6><i class="bi bi-square me-2"></i>Standard Q&A Cards</h6>
+                                        <p>Traditional question and answer format that tests specific knowledge points directly.</p>
+                                        <div class="alert alert-light">
+                                            <strong>Example:</strong><br>
+                                            <p>Q: What initiates peristaltic contractions?<br>
+                                            A: Increased chyme pH or motilin, modulated by ENS and ANS.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="card mb-3">
+                                    <div class="card-body">
+                                        <h6><i class="bi bi-square me-2"></i>Process Cards</h6>
+                                        <p>These cards focus on sequences, mechanisms, and steps in processes, helping you understand how systems work together.</p>
+                                        <div class="alert alert-light">
+                                            <strong>Example:</strong><br>
+                                            <p>Q: Describe the sequence of peristaltic contractions from beginning to end.<br>
+                                            A: 1. Segmenting contractions are replaced after meal absorption<br>
+                                               2. Peristaltic contractions occur across adjacent segments<br>
+                                               3. Undigested remains move to the large intestine<br>
+                                               4. Process stops when a new meal enters the stomach</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="card">
+                                    <div class="card-body">
+                                        <h6><i class="bi bi-square me-2"></i>Concept Maps</h6>
+                                        <p>These appear in the notes section of your cards and show how concepts relate to each other, providing broader context for your learning.</p>
+                                        <div class="alert alert-light">
+                                            <strong>Example:</strong><br>
+                                            <p>Peristaltic Contractions → Bacterial Control (prevents overgrowth)<br>
+                                               Peristaltic Contractions → Movement (stomach to large intestine)<br>
+                                               Motilin → triggers → Peristaltic Contractions<br>
+                                               Meal Ingestion → inhibits → Motilin Release</p>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                             
                             <div class="mb-4">
@@ -226,7 +451,15 @@
                                         </h2>
                                         <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
                                             <div class="accordion-body">
-                                                Our application uses advanced AI to analyze your OneNote pages and extract key concepts. It then generates questions and answers that test your understanding of the material. The AI focuses on creating clear, concise flashcards that follow best practices for effective learning.
+                                                <p>Our application uses a multi-stage AI process:</p>
+                                                <ol>
+                                                    <li><strong>Content Analysis:</strong> We extract both text and images from your OneNote pages</li>
+                                                    <li><strong>Concept Mapping:</strong> The AI creates a concept map showing how ideas relate to each other</li>
+                                                    <li><strong>Image Processing:</strong> Any diagrams or images are analyzed with a multimodal AI</li>
+                                                    <li><strong>Card Generation:</strong> Multiple card types are created to test different aspects of your knowledge</li>
+                                                    <li><strong>Context Preservation:</strong> Cards include the surrounding context from your notes</li>
+                                                </ol>
+                                                <p>The AI prioritizes using your exact phrasing and preserves the structure of your notes while adding helpful context.</p>
                                             </div>
                                         </div>
                                     </div>
@@ -234,12 +467,20 @@
                                     <div class="accordion-item">
                                         <h2 class="accordion-header">
                                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2">
-                                                Is my OneNote data secure?
+                                                How does it handle images and diagrams?
                                             </button>
                                         </h2>
                                         <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
                                             <div class="accordion-body">
-                                                Yes! We use Microsoft's secure authentication (OAuth 2.0) to access your OneNote data. We only request read-only access to your notebooks, and we don't store your notes permanently. Your data is processed securely for the sole purpose of generating flashcards.
+                                                <p>The application processes images in several ways:</p>
+                                                <ul>
+                                                    <li>Images are extracted from your OneNote pages and stored securely</li>
+                                                    <li>A multimodal AI analyzes each image to understand its content and context</li>
+                                                    <li>The AI identifies labels, annotations, and key elements in diagrams</li>
+                                                    <li>Relevant images are referenced in your flashcards</li>
+                                                    <li>The notes section of cards includes image references when appropriate</li>
+                                                </ul>
+                                                <p>This allows you to see important visual content while studying with your cards in Anki.</p>
                                             </div>
                                         </div>
                                     </div>
@@ -247,12 +488,19 @@
                                     <div class="accordion-item">
                                         <h2 class="accordion-header">
                                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3">
-                                                How do I import the deck into Anki?
+                                                Is my OneNote data secure?
                                             </button>
                                         </h2>
                                         <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
                                             <div class="accordion-body">
-                                                After downloading the .apkg file, open Anki on your computer. Click on "File" > "Import" and select the downloaded file. Anki will automatically import all the flashcards with their tags and organize them into a deck.
+                                                <p>Yes! We prioritize your data security:</p>
+                                                <ul>
+                                                    <li>We use Microsoft's secure authentication (OAuth 2.0) to access your OneNote data</li>
+                                                    <li>We only request read-only access to your notebooks</li>
+                                                    <li>Your notes are processed securely for the sole purpose of generating flashcards</li>
+                                                    <li>We don't store your notes permanently; all processing is temporary</li>
+                                                    <li>Generated cards are downloaded directly to your device</li>
+                                                </ul>
                                             </div>
                                         </div>
                                     </div>
@@ -260,26 +508,46 @@
                                     <div class="accordion-item">
                                         <h2 class="accordion-header">
                                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq4">
-                                                Can I edit the flashcards after generating them?
+                                                How do I import the deck into Anki?
                                             </button>
                                         </h2>
                                         <div id="faq4" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
                                             <div class="accordion-body">
-                                                Yes! Once imported into Anki, you can edit, delete, or add cards as you would with any Anki deck. The deck is completely yours after downloading.
+                                                <p>Importing your generated deck into Anki is simple:</p>
+                                                <ol>
+                                                    <li>Download the .apkg file from our application</li>
+                                                    <li>Open Anki on your computer (download from <a href="https://apps.ankiweb.net/" target="_blank">ankiweb.net</a> if needed)</li>
+                                                    <li>Click on "File" > "Import" in the Anki menu</li>
+                                                    <li>Select the downloaded .apkg file</li>
+                                                    <li>Anki will automatically import all the flashcards with their tags and organize them into a deck</li>
+                                                </ol>
+                                                <p>Once imported, you can study, edit, or organize the cards just like any other Anki deck.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header">
+                                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq5">
+                                                Tips for getting the best results
+                                            </button>
+                                        </h2>
+                                        <div id="faq5" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
+                                            <div class="accordion-body">
+                                                <p>To get the most effective flashcards:</p><ul>
+                                                    <li><strong>Organize your OneNote content</strong> with clear headings and sections</li>
+                                                    <li><strong>Include definitions and key concepts</strong> in your notes</li>
+                                                    <li><strong>Use bullet points and numbered lists</strong> for better card generation</li>
+                                                    <li><strong>Include diagrams and annotated images</strong> to enhance visual learning</li>
+                                                    <li><strong>Group related concepts</strong> together in your notes</li>
+                                                    <li><strong>Review generated cards</strong> in Anki and make adjustments as needed</li>
+                                                    <li><strong>Use consistent terminology</strong> throughout your notes</li>
+                                                </ul>
+                                                <p>Remember that the AI works best with well-structured notes that have clear organization and relationships between concepts.</p>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
-                            </div>
-                            
-                            <div class="mb-4">
-                                <h5>Tips for Best Results</h5>
-                                <ul>
-                                    <li>Organize your OneNote content with clear headings and sections</li>
-                                    <li>Include definitions, key concepts, and important points in your notes</li>
-                                    <li>Use bullet points and numbered lists for better flashcard generation</li>
-                                    <li>Review the generated flashcards in Anki and make adjustments as needed</li>
-                                </ul>
                             </div>
                             
                             <div class="mb-4">
