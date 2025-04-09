@@ -628,10 +628,11 @@ ${conceptMapSummary}
 ${imagesSummary}
 
 IMPORTANT INSTRUCTIONS:
-1. PRIORITIZE cloze deletion cards that use the student's EXACT phrasing
+1. PRIORITIZE cloze deletion cards using the format {{c1::term to be hidden}}, ensuring you're using the same language and structure as the original notes.
+   Example: "The process of {{c1::photosynthesis}} converts light energy into chemical energy."
 2. Create process/sequence cards that show the steps and mechanisms
 3. Include connection cards that test relationships between concepts
-4. For all cards, include explanations of key terms in the notes section
+4. For all cards, include explanations of key terms in the notes section 
 5. Be comprehensive - cover ALL the information in the notes, especially:
    - Sequences (what happens before/after)
    - Locations (where processes occur)
@@ -684,10 +685,12 @@ ${processableContent}
         const flashcards = JSON.parse(jsonMatch[1]);
         
         // Enhance flashcards with concept map information
-        return enhanceFlashcardsWithConceptMap(flashcards, conceptMap, processedImages);
+        const enhancedCards = enhanceFlashcardsWithConceptMap(flashcards, conceptMap, processedImages);
+        return processFlashcardFormats(enhancedCards);
       } else {
         const flashcards = JSON.parse(responseText);
-        return enhanceFlashcardsWithConceptMap(flashcards, conceptMap, processedImages);
+        const enhancedCards = enhanceFlashcardsWithConceptMap(flashcards, conceptMap, processedImages);
+        return processFlashcardFormats(enhancedCards);
       }
     } catch (e) {
       console.error('Error parsing AI response:', e);
@@ -789,6 +792,28 @@ function enhanceFlashcardsWithConceptMap(flashcards, conceptMap, processedImages
       console.error('Error enhancing flashcard with concept map:', error);
       return card;
     }
+  });
+}
+
+// Add this after the enhanceFlashcardsWithConceptMap function
+function processFlashcardFormats(flashcards) {
+  if (!Array.isArray(flashcards)) return [];
+  
+  return flashcards.map(card => {
+    // Ensure type exists
+    if (!card.type) {
+      card.type = card.question && card.answer ? 'standard' : 'cloze';
+    }
+    
+    // Only format cloze text if it's already a cloze type
+    if (card.type === 'cloze' && card.text) {
+      // Convert [cloze:text] format to Anki format if needed
+      if (card.text.includes('[cloze:')) {
+        card.text = card.text.replace(/\[cloze:(.*?)\]/g, '{{c1::$1}}');
+      }
+    }
+    
+    return card;
   });
 }
 
