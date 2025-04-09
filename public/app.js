@@ -43,6 +43,13 @@ async function init() {
       console.log('User is not authenticated, displaying login screen');
     }
 
+    // Set default value for max cards per page
+    const maxCardsElement = document.getElementById('max-cards-per-page');
+    if (maxCardsElement) {
+      // Set to "No limit" option
+      maxCardsElement.value = "0";
+    }
+
     console.log('Initialization complete');
   } catch (error) {
     console.error('Initialization error:', error);
@@ -313,6 +320,86 @@ function setupEventListeners() {
       showView(viewId);
     });
   });
+  
+  // Settings save button
+  const saveSettingsButton = document.getElementById('save-settings');
+  if (saveSettingsButton) {
+    saveSettingsButton.addEventListener('click', () => {
+      // Save all settings to localStorage
+      const settings = {
+        maxCardsPerPage: document.getElementById('max-cards-per-page').value,
+        cardComplexity: document.getElementById('card-complexity').value,
+        darkMode: document.getElementById('dark-mode').checked,
+        enableAnimations: document.getElementById('enable-animations').checked,
+        processImages: document.getElementById('process-images').checked,
+        generateConceptMaps: document.getElementById('generate-concept-maps').checked,
+        useOriginalText: document.getElementById('use-original-text').checked,
+        includeMetadata: document.getElementById('include-metadata').checked
+      };
+      
+      localStorage.setItem('appSettings', JSON.stringify(settings));
+      showNotification('Settings saved successfully');
+      
+      // Apply dark mode if needed
+      if (settings.darkMode) {
+        document.body.classList.add('dark-mode');
+      } else {
+        document.body.classList.remove('dark-mode');
+      }
+    });
+  }
+  
+  // Load saved settings on init
+  loadSavedSettings();
+}
+
+// Load saved settings
+function loadSavedSettings() {
+  try {
+    const savedSettingsString = localStorage.getItem('appSettings');
+    if (!savedSettingsString) return;
+    
+    const settings = JSON.parse(savedSettingsString);
+    
+    // Apply settings to UI
+    if (document.getElementById('max-cards-per-page')) {
+      document.getElementById('max-cards-per-page').value = settings.maxCardsPerPage || "0";
+    }
+    
+    if (document.getElementById('card-complexity')) {
+      document.getElementById('card-complexity').value = settings.cardComplexity || "standard";
+    }
+    
+    if (document.getElementById('dark-mode')) {
+      document.getElementById('dark-mode').checked = settings.darkMode || false;
+      // Apply dark mode
+      if (settings.darkMode) {
+        document.body.classList.add('dark-mode');
+      }
+    }
+    
+    if (document.getElementById('enable-animations')) {
+      document.getElementById('enable-animations').checked = settings.enableAnimations !== false; // Default to true
+    }
+    
+    if (document.getElementById('process-images')) {
+      document.getElementById('process-images').checked = settings.processImages !== false; // Default to true
+    }
+    
+    if (document.getElementById('generate-concept-maps')) {
+      document.getElementById('generate-concept-maps').checked = settings.generateConceptMaps !== false; // Default to true
+    }
+    
+    if (document.getElementById('use-original-text')) {
+      document.getElementById('use-original-text').checked = settings.useOriginalText !== false; // Default to true
+    }
+    
+    if (document.getElementById('include-metadata')) {
+      document.getElementById('include-metadata').checked = settings.includeMetadata !== false; // Default to true
+    }
+  } catch (error) {
+    console.error('Error loading saved settings:', error);
+  }
 }
 
 // Save card type preferences
@@ -595,8 +682,33 @@ async function generateAnkiDeck() {
     // Get section name for deck title
     const sectionName = document.querySelector('#section-select option:checked').textContent || 'OneNote';
     
-    // Setup EventSource for server-sent events
-    const eventSource = new EventSource(`/api/anki/generate/stream?sectionId=${currentSectionId}&sectionName=${encodeURIComponent(sectionName)}&pageIds=${selectedPageIds.join(',')}`);
+    // Get generation options from settings
+    const maxCardsPerPage = parseInt(document.getElementById('max-cards-per-page')?.value || '0');
+    const cardComplexity = document.getElementById('card-complexity')?.value || 'standard';
+    const processImages = document.getElementById('process-images')?.checked ?? true;
+    const generateConceptMaps = document.getElementById('generate-concept-maps')?.checked ?? true;
+    const useOriginalText = document.getElementById('use-original-text')?.checked ?? true;
+    const includeMetadata = document.getElementById('include-metadata')?.checked ?? true;
+    
+    // Build query parameters with all preferences
+    const queryParams = new URLSearchParams({
+      sectionId: currentSectionId,
+      sectionName: encodeURIComponent(sectionName),
+      pageIds: selectedPageIds.join(','),
+      enableCloze: cardPreferences.enableCloze,
+      enableStandard: cardPreferences.enableStandard,
+      enableProcess: cardPreferences.enableProcess,
+      enableConceptMap: cardPreferences.enableConceptMap,
+      maxCardsPerPage,
+      cardComplexity,
+      processImages,
+      generateConceptMaps,
+      useOriginalText,
+      includeMetadata
+    });
+    
+    // Setup EventSource for server-sent events with new parameters
+    const eventSource = new EventSource(`/api/anki/generate/stream?${queryParams}`);
     
     // Track cards as they're generated
     let cardCount = 0;

@@ -593,7 +593,7 @@ function extractQuestionsFromAnalysis(analysis) {
 }
 
 // Extract flashcards from content using Gemini AI
-async function extractFlashcardsWithAI(content, pageTitle, conceptMap, processedImages = []) {
+async function extractFlashcardsWithAI(content, pageTitle, conceptMap, processedImages = [], preferences = {}) {
   try {
     // Calculate approximate tokens for truncation if needed
     const estimatedTokens = content.split(/\s+/).length;
@@ -636,6 +636,64 @@ ${processedImages.map((img, index) =>
 `;
     }
     
+    // Adjust card type instructions based on preferences
+    let cardTypeInstructions = '';
+    const enabledCardTypes = [];
+    
+    if (preferences.enableCloze) {
+      enabledCardTypes.push("cloze deletion cards");
+      // Make cloze cards the highest priority
+      cardTypeInstructions += `1. PRIORITIZE cloze deletion cards using the format {{c1::term to be hidden}}, ensuring you're using the same language and structure as the original notes.\n   Example: "The process of {{c1::photosynthesis}} converts light energy into chemical energy."\n`;
+    }
+    
+    if (preferences.enableProcess) {
+      enabledCardTypes.push("process/sequence cards");
+      cardTypeInstructions += `${enabledCardTypes.length}. Create process/sequence cards that show the steps and mechanisms\n`;
+    }
+    
+    if (preferences.enableStandard) {
+      enabledCardTypes.push("standard Q&A cards");
+      cardTypeInstructions += `${enabledCardTypes.length}. Create standard question and answer cards for key concepts and definitions\n`;
+    }
+    
+    // If no card types are explicitly enabled, default to all
+    if (enabledCardTypes.length === 0) {
+      cardTypeInstructions = `
+1. PRIORITIZE cloze deletion cards using the format {{c1::term to be hidden}}, ensuring you're using the same language and structure as the original notes.
+   Example: "The process of {{c1::photosynthesis}} converts light energy into chemical energy."
+2. Create process/sequence cards that show the steps and mechanisms
+3. Create standard question and answer cards for key concepts and definitions
+`;
+    }
+    
+    // Add additional instructions based on preferences
+    let additionalInstructions = '';
+    if (preferences.enableConceptMap) {
+      additionalInstructions += "4. Include concept maps to show key relationships between concepts.\n";
+    }
+    
+    if (preferences.useOriginalText) {
+      additionalInstructions += "- Use the student's original language and structure whenever possible\n";
+    }
+    
+    if (preferences.includeMetadata) {
+      additionalInstructions += "- Include explanations of key terms in the notes section\n";
+    }
+    
+    // Set card complexity based on preferences
+    let complexityInstructions = '';
+    switch(preferences.cardComplexity) {
+      case 'basic':
+        complexityInstructions = "Create simpler cards with straightforward questions and answers. Focus on core concepts only.";
+        break;
+      case 'advanced':
+        complexityInstructions = "Create more detailed and advanced cards that include nuanced information and connections between concepts.";
+        break;
+      default: // standard
+        complexityInstructions = "Create balanced cards with appropriate detail for comprehensive understanding.";
+        break;
+    }
+    
     // Prompt for Gemini to create flashcards
     const prompt = `
 Create high-quality flashcards from the following notes on "${pageTitle}".
@@ -645,11 +703,8 @@ ${conceptMapSummary}
 ${imagesSummary}
 
 IMPORTANT INSTRUCTIONS:
-1. PRIORITIZE cloze deletion cards using the format {{c1::term to be hidden}}, ensuring you're using the same language and structure as the original notes.
-   Example: "The process of {{c1::photosynthesis}} converts light energy into chemical energy."
-2. Create process/sequence cards that show the steps and mechanisms
-3. Include connection cards that test relationships between concepts
-4. For all cards, include explanations of key terms in the notes section to provide context. Include concept maps to show key relationships between concepts.
+${cardTypeInstructions}
+${additionalInstructions}
 5. Be comprehensive - cover ALL the information in the notes, especially:
    - Sequences (what happens before/after)
    - Locations (where processes occur)
@@ -657,9 +712,10 @@ IMPORTANT INSTRUCTIONS:
    - Cause and effect relationships
    - Connections between different concepts
 
+${complexityInstructions}
+
 For each card:
-- Use the student's original language and structure whenever possible
-- Include explanations of key terms in the notes section
+- Include explanations of key terms in the notes section to provide context
 - Reference relevant images where appropriate
 
 Format your response as JSON:
@@ -701,12 +757,18 @@ ${processableContent}
       if (jsonMatch && jsonMatch[1]) {
         const flashcards = JSON.parse(jsonMatch[1]);
         
-        // Enhance flashcards with concept map information
-        const enhancedCards = enhanceFlashcardsWithConceptMap(flashcards, conceptMap, processedImages);
+        // Enhance flashcards with concept map information if enabled
+        const enhancedCards = preferences.enableConceptMap ? 
+          enhanceFlashcardsWithConceptMap(flashcards, conceptMap, processedImages) :
+          flashcards;
+          
         return processFlashcardFormats(enhancedCards);
       } else {
         const flashcards = JSON.parse(responseText);
-        const enhancedCards = enhanceFlashcardsWithConceptMap(flashcards, conceptMap, processedImages);
+        const enhancedCards = preferences.enableConceptMap ? 
+          enhanceFlashcardsWithConceptMap(flashcards, conceptMap, processedImages) :
+          flashcards;
+          
         return processFlashcardFormats(enhancedCards);
       }
     } catch (e) {
@@ -783,7 +845,7 @@ function enhanceFlashcardsWithConceptMap(flashcards, conceptMap, processedImages
                 const relationshipType = rel.type || 'related to';
                 const direction = isSource ? '→' : '←';
                 
-                conceptMapText += `<li><strong>${concept.name}</strong> ${direction} <strong>${otherConcept.name}</strong> (${relationshipType})`;
+                conceptMapText += `<li><span class="relationship"><strong>${concept.name}</strong> ${direction} <strong>${otherConcept.name}</strong></span> (${relationshipType})`;
                 if (rel.description) {
                   conceptMapText += `<br><em>${rel.description}</em>`;
                 }
@@ -873,7 +935,7 @@ function enhanceFlashcardsWithConceptMap(flashcards, conceptMap, processedImages
   });
 }
 
-// Add this after the enhanceFlashcardsWithConceptMap function
+// Process flashcard formats (handle cloze syntax, etc)
 function processFlashcardFormats(flashcards) {
   if (!Array.isArray(flashcards)) return [];
   
@@ -889,53 +951,100 @@ function processFlashcardFormats(flashcards) {
       if (card.text.includes('[cloze:')) {
         card.text = card.text.replace(/\[cloze:(.*?)\]/g, '{{c1::$1}}');
       }
+      
+      // Make sure we have at least one cloze deletion
+      if (!card.text.includes('{{c')) {
+        // Try to identify terms to create a cloze
+        const terms = extractImportantTerms(card.text);
+        if (terms.length > 0) {
+          // Use the first term as a cloze deletion
+          card.text = card.text.replace(new RegExp(`\\b${terms[0]}\\b`, 'i'), `{{c1::${terms[0]}}}`);
+        }
+      }
     }
     
     return card;
   });
+}
+
+// Helper function to extract important terms for cloze cards
+function extractImportantTerms(text) {
+  if (!text) return [];
+  
+  // Look for capitalized terms or terms in quotes as likely important concepts
+  const capitalizedTerms = text.match(/\b[A-Z][a-zA-Z]{2,}\b/g) || [];
+  const quotedTerms = text.match(/"([^"]+)"|'([^']+)'/g) || [];
+  
+  // Clean up quoted terms by removing quotes
+  const cleanQuotedTerms = quotedTerms.map(term => term.replace(/['"]/g, ''));
+  
+  // Combine and remove duplicates
+  const allTerms = [...new Set([...capitalizedTerms, ...cleanQuotedTerms])];
+  
+  return allTerms;
 }
 
 // Converts markdown-style notes to HTML for better Anki formatting
 function formatNotesForAnki(notes) {
   if (!notes) return '';
   
-  // Simple formatting that preserves most of the original content
-  // Just add some basic styling for readability
+  // Add improved styling for better readability in Anki
   return `<div class="anki-notes">
 ${notes}
 <style>
-  .anki-notes { font-family: Arial, sans-serif; line-height: 1.5; }
-  .anki-notes h2, .anki-notes h3 { color: #2196F3; margin-top: 15px; }
-  .anki-notes h2 { border-bottom: 1px solid #e0e0e0; padding-bottom: 5px; }
+  .anki-notes { 
+    font-family: Arial, sans-serif; 
+    line-height: 1.5; 
+    color: #333;
+    max-width: 700px;
+    margin: 0 auto;
+  }
+  .anki-notes h2, .anki-notes h3 { 
+    color: #2196F3; 
+    margin-top: 15px; 
+  }
+  .anki-notes h2 { 
+    border-bottom: 1px solid #e0e0e0; 
+    padding-bottom: 5px; 
+    font-size: 1.4em;
+  }
+  .anki-notes h3 {
+    font-size: 1.2em;
+    margin-bottom: 8px;
+  }
   .anki-notes em { color: #666; }
-  .anki-notes strong { color: #333; }
-  .anki-notes img { max-width: 100%; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; padding: 5px; }
+  .anki-notes strong { 
+    color: #333;
+    font-weight: bold;
+  }
+  .anki-notes img { 
+    max-width: 100%; 
+    margin: 10px 0; 
+    border: 1px solid #ddd; 
+    border-radius: 4px; 
+    padding: 5px; 
+    display: block;
+  }
   .anki-notes ul { padding-left: 20px; }
-  .anki-notes .concept-map { background-color: #f9f9f9; padding: 10px; border-radius: 5px; margin: 10px 0; border-left: 3px solid #2196F3; }
-  .anki-notes hr { border: 0; height: 1px; background: #ddd; margin: 15px 0; }
+  .anki-notes .concept-map { 
+    background-color: #f9f9f9; 
+    padding: 10px; 
+    border-radius: 5px; 
+    margin: 10px 0; 
+    border-left: 3px solid #2196F3; 
+  }
+  .anki-notes .relationship {
+    color: #4CAF50;
+    font-weight: bold;
+  }
+  .anki-notes hr { 
+    border: 0; 
+    height: 1px; 
+    background: #ddd; 
+    margin: 15px 0; 
+  }
 </style>
 </div>`;
-}
-
-function processFlashcardFormats(flashcards) {
-  if (!Array.isArray(flashcards)) return [];
-  
-  return flashcards.map(card => {
-    // Ensure type exists
-    if (!card.type) {
-      card.type = card.question && card.answer ? 'standard' : 'cloze';
-    }
-    
-    // Only format cloze text if it's already a cloze type
-    if (card.type === 'cloze' && card.text) {
-      // Convert [cloze:text] format to Anki format if needed
-      if (card.text.includes('[cloze:')) {
-        card.text = card.text.replace(/\[cloze:(.*?)\]/g, '{{c1::$1}}');
-      }
-    }
-    
-    return card;
-  });
 }
 
 // Generate an Anki APKG file from flashcards
@@ -1245,7 +1354,7 @@ app.get('/api/onenote/scan/:sectionId', ensureAuthenticated, async (req, res) =>
 // Generate Anki deck from selected OneNote pages
 app.post('/api/anki/generate', ensureAuthenticated, async (req, res) => {
   try {
-    const { sectionId, sectionName, pageIds } = req.body;
+    const { sectionId, sectionName, pageIds, preferences } = req.body;
     
     if (!sectionId || !pageIds || !Array.isArray(pageIds) || pageIds.length === 0) {
       return res.status(400).json({ error: 'Invalid request parameters' });
@@ -1276,19 +1385,32 @@ app.post('/api/anki/generate', ensureAuthenticated, async (req, res) => {
         // Extract content (text and images)
         const extractedContent = await extractContentFromOneNoteHtml(req, htmlContent, pageId);
         
-        // Process images with AI (if any)
-        const processedImages = await processImagesWithAI(extractedContent.images, pageTitle);
+        // Process images with AI (if setting enabled)
+        const processImages = preferences?.processImages !== false;
+        const processedImages = processImages ? 
+          await processImagesWithAI(extractedContent.images, pageTitle) :
+          extractedContent.images.map(img => ({ ...img, analysis: '', potentialQuestions: [] }));
         
-        // Generate concept map
-        const conceptMap = await generateConceptMap(extractedContent.text, pageTitle);
+        // Generate concept map (if setting enabled)
+        const generateConceptMaps = preferences?.generateConceptMaps !== false;
+        const conceptMap = generateConceptMaps ? 
+          await generateConceptMap(extractedContent.text, pageTitle) :
+          { concepts: [], relationships: [] };
         
-        // Extract flashcards using AI
+        // Extract flashcards using AI with preferences
         const flashcards = await extractFlashcardsWithAI(
           extractedContent.text, 
           pageTitle, 
           conceptMap,
-          processedImages
+          processedImages,
+          preferences || {}
         );
+        
+        // Apply card limit if set
+        let pageFlashcards = flashcards;
+        if (preferences?.maxCardsPerPage > 0 && flashcards.length > preferences.maxCardsPerPage) {
+          pageFlashcards = flashcards.slice(0, preferences.maxCardsPerPage);
+        }
         
         // Add page title as a tag to all cards
         const formattedPageTag = pageTitle
@@ -1298,14 +1420,14 @@ app.post('/api/anki/generate', ensureAuthenticated, async (req, res) => {
           .replace(/^_|_$/g, '');
         
         // Add page info to each flashcard
-        const pageFlashcards = flashcards.map(card => ({
+        const taggedFlashcards = pageFlashcards.map(card => ({
           ...card,
           tags: [...(card.tags || []), formattedPageTag],
           sourcePageTitle: pageTitle,
           sourcePageId: pageId
         }));
         
-        allFlashcards = [...allFlashcards, ...pageFlashcards];
+        allFlashcards = [...allFlashcards, ...taggedFlashcards];
       } catch (error) {
         console.error(`Error processing page ${pageId}:`, error);
         // Continue with other pages
@@ -1334,11 +1456,27 @@ app.post('/api/anki/generate', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// After the existing `/api/anki/generate` route
+// Stream version of the Anki generation endpoint
 app.get('/api/anki/generate/stream', ensureAuthenticated, async (req, res) => {
   try {
     const { sectionId, sectionName } = req.query;
     const pageIds = req.query.pageIds.split(',');
+    
+    // Get card generation preferences from query parameters
+    const preferences = {
+      enableCloze: req.query.enableCloze === 'true',
+      enableStandard: req.query.enableStandard === 'true',
+      enableProcess: req.query.enableProcess === 'true',
+      enableConceptMap: req.query.enableConceptMap === 'true',
+      maxCardsPerPage: parseInt(req.query.maxCardsPerPage || '0'),
+      cardComplexity: req.query.cardComplexity || 'standard',
+      processImages: req.query.processImages === 'true',
+      generateConceptMaps: req.query.generateConceptMaps === 'true',
+      useOriginalText: req.query.useOriginalText === 'true',
+      includeMetadata: req.query.includeMetadata === 'true'
+    };
+    
+    console.log('Card generation preferences:', preferences);
     
     if (!sectionId || !pageIds || !Array.isArray(pageIds) || pageIds.length === 0) {
       return res.status(400).json({ error: 'Invalid request parameters' });
@@ -1398,46 +1536,61 @@ app.get('/api/anki/generate/stream', ensureAuthenticated, async (req, res) => {
         sendProgress('processing_images', Math.floor((currentPage - 0.3) / totalPages * 100), 
           `Processing images from "${pageTitle}"...`);
         
-        const processedImages = await processImagesWithAI(extractedContent.images, pageTitle);
+        // Only process images if the setting is enabled
+        const processedImages = preferences.processImages ? 
+          await processImagesWithAI(extractedContent.images, pageTitle) :
+          extractedContent.images.map(img => ({ ...img, analysis: '', potentialQuestions: [] }));
         
         // Generate concept map
         sendProgress('generating_map', Math.floor((currentPage - 0.2) / totalPages * 100), 
           `Creating concept map for "${pageTitle}"...`);
         
-        const conceptMap = await generateConceptMap(extractedContent.text, pageTitle);
+        // Only generate concept maps if the setting is enabled
+        const conceptMap = preferences.generateConceptMaps ? 
+          await generateConceptMap(extractedContent.text, pageTitle) :
+          { concepts: [], relationships: [] };
         
         // Extract flashcards
         sendProgress('creating_cards', Math.floor((currentPage - 0.1) / totalPages * 100), 
           `Generating flashcards for "${pageTitle}"...`);
         
+        // Pass user preferences to the flashcard generation function
         const flashcards = await extractFlashcardsWithAI(
           extractedContent.text, 
           pageTitle, 
           conceptMap,
-          processedImages
+          processedImages,
+          preferences
         );
         
-        // Add page flashcards to collection
+        // Apply card limit if set
+        let pageFlashcards = flashcards;
+        if (preferences.maxCardsPerPage > 0 && flashcards.length > preferences.maxCardsPerPage) {
+          pageFlashcards = flashcards.slice(0, preferences.maxCardsPerPage);
+        }
+        
+        // Add page title as a tag to all cards
         const formattedPageTag = pageTitle
           .toLowerCase()
           .replace(/[^a-z0-9]/g, '_')
           .replace(/_+/g, '_')
           .replace(/^_|_$/g, '');
         
-        const pageFlashcards = flashcards.map(card => ({
+        // Add page info to each flashcard
+        const taggedFlashcards = pageFlashcards.map(card => ({
           ...card,
           tags: [...(card.tags || []), formattedPageTag],
           sourcePageTitle: pageTitle,
           sourcePageId: pageId
         }));
         
-        allFlashcards = [...allFlashcards, ...pageFlashcards];
-        totalCardCount += pageFlashcards.length;
+        allFlashcards = [...allFlashcards, ...taggedFlashcards];
+        totalCardCount += taggedFlashcards.length;
         
         // Update on page completion
         sendProgress('page_complete', Math.floor(currentPage / totalPages * 100), 
-          `Completed ${currentPage} of ${totalPages} pages (${pageFlashcards.length} cards)`, 
-          { cardCount: pageFlashcards.length });
+          `Completed ${currentPage} of ${totalPages} pages (${taggedFlashcards.length} cards)`, 
+          { cardCount: taggedFlashcards.length });
       } catch (error) {
         console.error(`Error processing page ${pageId}:`, error);
         sendProgress('page_error', Math.floor(currentPage / totalPages * 100), 
