@@ -391,21 +391,23 @@ function generateConceptMapText(conceptMap, focusConcept = null) {
       return '';
     }
     
-    let result = '## Concept Map\n\n';
+    // Start with a simple header
+    let result = '<div class="concept-map">\n<h3>Concept Map</h3>\n';
     
     // If we have a focus concept, only include directly related concepts
     if (focusConcept) {
       // Find the concept
       const concept = conceptMap.concepts.find(c => 
-        c.name.toLowerCase() === focusConcept.toLowerCase() || 
+        c.name?.toLowerCase() === focusConcept.toLowerCase() || 
         c.id === focusConcept
       );
       
       if (concept) {
-        result += `### ${concept.name}\n`;
+        result += `<p><strong>${concept.name}</strong>`;
         if (concept.description) {
-          result += `${concept.description}\n\n`;
+          result += `: ${concept.description}`;
         }
+        result += '</p>\n';
         
         // Find direct relationships
         const relations = conceptMap.relationships.filter(r => 
@@ -413,7 +415,7 @@ function generateConceptMapText(conceptMap, focusConcept = null) {
         );
         
         if (relations.length > 0) {
-          result += 'Related Concepts:\n';
+          result += '<p><strong>Related Concepts:</strong></p>\n<ul>\n';
           
           relations.forEach(rel => {
             const isSource = rel.source === concept.id;
@@ -424,37 +426,52 @@ function generateConceptMapText(conceptMap, focusConcept = null) {
               const relationshipType = rel.type || 'related to';
               const direction = isSource ? '→' : '←';
               
-              result += `- ${concept.name} ${direction} ${otherConcept.name} (${relationshipType})\n`;
+              result += `<li>${concept.name} ${direction} ${otherConcept.name} (${relationshipType})`;
               if (rel.description) {
-                result += `  ${rel.description}\n`;
+                result += `<br><em>${rel.description}</em>`;
               }
+              result += '</li>\n';
             }
           });
+          
+          result += '</ul>\n';
         }
       }
     } else {
-      // Include all major concepts and relationships
-      result += '### Key Concepts\n';
+      // Include all major concepts and relationships in a simple format
+      result += '<p><strong>Key Concepts:</strong></p>\n<ul>\n';
       
       conceptMap.concepts.forEach(concept => {
-        result += `- **${concept.name}**: ${concept.description || ''}\n`;
-      });
-      
-      result += '\n### Relationships\n';
-      
-      conceptMap.relationships.forEach(rel => {
-        const sourceConcept = conceptMap.concepts.find(c => c.id === rel.source);
-        const targetConcept = conceptMap.concepts.find(c => c.id === rel.target);
-        
-        if (sourceConcept && targetConcept) {
-          result += `- **${sourceConcept.name}** → **${targetConcept.name}** (${rel.type || 'related'})\n`;
-          if (rel.description) {
-            result += `  ${rel.description}\n`;
-          }
+        result += `<li><strong>${concept.name}</strong>`;
+        if (concept.description) {
+          result += `: ${concept.description}`;
         }
+        result += '</li>\n';
       });
+      
+      result += '</ul>\n';
+      
+      if (conceptMap.relationships.length > 0) {
+        result += '<p><strong>Relationships:</strong></p>\n<ul>\n';
+        
+        conceptMap.relationships.forEach(rel => {
+          const sourceConcept = conceptMap.concepts.find(c => c.id === rel.source);
+          const targetConcept = conceptMap.concepts.find(c => c.id === rel.target);
+          
+          if (sourceConcept && targetConcept) {
+            result += `<li>${sourceConcept.name} → ${targetConcept.name} (${rel.type || 'related'})`;
+            if (rel.description) {
+              result += `<br><em>${rel.description}</em>`;
+            }
+            result += '</li>\n';
+          }
+        });
+        
+        result += '</ul>\n';
+      }
     }
     
+    result += '</div>\n';
     return result;
   } catch (error) {
     console.error('Error generating concept map text:', error);
@@ -632,7 +649,7 @@ IMPORTANT INSTRUCTIONS:
    Example: "The process of {{c1::photosynthesis}} converts light energy into chemical energy."
 2. Create process/sequence cards that show the steps and mechanisms
 3. Include connection cards that test relationships between concepts
-4. For all cards, include explanations of key terms in the notes section 
+4. For all cards, include explanations of key terms in the notes section to provide context. Include concept maps to show key relationships between concepts.
 5. Be comprehensive - cover ALL the information in the notes, especially:
    - Sequences (what happens before/after)
    - Locations (where processes occur)
@@ -718,7 +735,7 @@ function enhanceFlashcardsWithConceptMap(flashcards, conceptMap, processedImages
         const questionWords = card.question.toLowerCase().split(/\s+/);
         
         for (const concept of conceptMap.concepts || []) {
-          if (questionWords.includes(concept.name.toLowerCase())) {
+          if (concept.name && questionWords.includes(concept.name.toLowerCase())) {
             mainConcept = concept.id;
             break;
           }
@@ -728,17 +745,73 @@ function enhanceFlashcardsWithConceptMap(flashcards, conceptMap, processedImages
         const clozeText = card.text.toLowerCase();
         
         for (const concept of conceptMap.concepts || []) {
-          if (clozeText.includes(concept.name.toLowerCase())) {
+          if (concept.name && clozeText.includes(concept.name.toLowerCase())) {
             mainConcept = concept.id;
             break;
           }
         }
       }
       
-      // Generate concept map text for this specific card
-      const conceptMapText = mainConcept ? 
-        generateConceptMapText(conceptMap, mainConcept) : 
-        '';
+      // Generate concept map section with simple formatting
+      let conceptMapText = '';
+      if (mainConcept) {
+        // Find the concept
+        const concept = conceptMap.concepts.find(c => c.id === mainConcept);
+        
+        if (concept) {
+          conceptMapText = '<div class="concept-map">\n';
+          conceptMapText += `<h3>Concept Map: ${concept.name}</h3>\n`;
+          
+          if (concept.description) {
+            conceptMapText += `<p>${concept.description}</p>\n`;
+          }
+          
+          // Find direct relationships
+          const relations = conceptMap.relationships.filter(r => 
+            r.source === concept.id || r.target === concept.id
+          );
+          
+          if (relations.length > 0) {
+            conceptMapText += '<p><strong>Related Concepts:</strong></p>\n<ul>\n';
+            
+            relations.forEach(rel => {
+              const isSource = rel.source === concept.id;
+              const otherId = isSource ? rel.target : rel.source;
+              const otherConcept = conceptMap.concepts.find(c => c.id === otherId);
+              
+              if (otherConcept) {
+                const relationshipType = rel.type || 'related to';
+                const direction = isSource ? '→' : '←';
+                
+                conceptMapText += `<li><strong>${concept.name}</strong> ${direction} <strong>${otherConcept.name}</strong> (${relationshipType})`;
+                if (rel.description) {
+                  conceptMapText += `<br><em>${rel.description}</em>`;
+                }
+                conceptMapText += '</li>\n';
+              }
+            });
+            
+            conceptMapText += '</ul>\n';
+          }
+          
+          conceptMapText += '</div>\n';
+        }
+      } else if (conceptMap.concepts && conceptMap.concepts.length > 0) {
+        // No specific concept focus, include a brief summary
+        conceptMapText = '<div class="concept-map">\n';
+        conceptMapText += '<h3>Key Concepts</h3>\n<ul>\n';
+        
+        // Just include a few major concepts (max 5)
+        conceptMap.concepts.slice(0, 5).forEach(concept => {
+          conceptMapText += `<li><strong>${concept.name}</strong>`;
+          if (concept.description) {
+            conceptMapText += `: ${concept.description}`;
+          }
+          conceptMapText += '</li>\n';
+        });
+        
+        conceptMapText += '</ul>\n</div>\n';
+      }
       
       // Find related images based on concept
       const relatedImages = [];
@@ -755,32 +828,37 @@ function enhanceFlashcardsWithConceptMap(flashcards, conceptMap, processedImages
         }
       }
       
-      // Format image references for inclusion in notes
+      // Format image references in a simple way
       let imageReferences = '';
       if (relatedImages.length > 0) {
-        imageReferences = '\n\n## Related Images\n';
+        imageReferences = '<h3>Related Images</h3>\n';
         relatedImages.forEach(imagePath => {
           const imageInfo = processedImages.find(img => img.path === imagePath);
-          if (imageInfo) {
-            imageReferences += `\n![${imageInfo.altText || 'Image'}](${imagePath})\n`;
-            if (imageInfo.context) {
-              imageReferences += `*${imageInfo.context}*\n`;
-            }
-          } else {
-            imageReferences += `\n![Image](${imagePath})\n`;
+          const filename = path.basename(imagePath);
+          
+          imageReferences += `<img src="${filename}" alt="${imageInfo?.altText || 'Image'}">\n`;
+          if (imageInfo && imageInfo.context) {
+            imageReferences += `<em>${imageInfo.context}</em>\n`;
           }
         });
       }
       
-      // Enhance notes with concept map and image references
-      let enhancedNotes = card.notes || '';
+      // Combine notes, concept map, and images
+      let enhancedNotes = '';
       
-      if (conceptMapText) {
-        enhancedNotes += '\n\n' + conceptMapText;
+      // Add original notes if they exist
+      if (card.notes && card.notes.trim()) {
+        enhancedNotes += card.notes.trim();
       }
       
+      // Add concept map if available
+      if (conceptMapText && conceptMapText.trim()) {
+        enhancedNotes += (enhancedNotes ? '<hr>' : '') + conceptMapText;
+      }
+      
+      // Add image references if available
       if (imageReferences) {
-        enhancedNotes += '\n\n' + imageReferences;
+        enhancedNotes += (enhancedNotes ? '<hr>' : '') + imageReferences;
       }
       
       return {
@@ -817,6 +895,49 @@ function processFlashcardFormats(flashcards) {
   });
 }
 
+// Converts markdown-style notes to HTML for better Anki formatting
+function formatNotesForAnki(notes) {
+  if (!notes) return '';
+  
+  // Simple formatting that preserves most of the original content
+  // Just add some basic styling for readability
+  return `<div class="anki-notes">
+${notes}
+<style>
+  .anki-notes { font-family: Arial, sans-serif; line-height: 1.5; }
+  .anki-notes h2, .anki-notes h3 { color: #2196F3; margin-top: 15px; }
+  .anki-notes h2 { border-bottom: 1px solid #e0e0e0; padding-bottom: 5px; }
+  .anki-notes em { color: #666; }
+  .anki-notes strong { color: #333; }
+  .anki-notes img { max-width: 100%; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; padding: 5px; }
+  .anki-notes ul { padding-left: 20px; }
+  .anki-notes .concept-map { background-color: #f9f9f9; padding: 10px; border-radius: 5px; margin: 10px 0; border-left: 3px solid #2196F3; }
+  .anki-notes hr { border: 0; height: 1px; background: #ddd; margin: 15px 0; }
+</style>
+</div>`;
+}
+
+function processFlashcardFormats(flashcards) {
+  if (!Array.isArray(flashcards)) return [];
+  
+  return flashcards.map(card => {
+    // Ensure type exists
+    if (!card.type) {
+      card.type = card.question && card.answer ? 'standard' : 'cloze';
+    }
+    
+    // Only format cloze text if it's already a cloze type
+    if (card.type === 'cloze' && card.text) {
+      // Convert [cloze:text] format to Anki format if needed
+      if (card.text.includes('[cloze:')) {
+        card.text = card.text.replace(/\[cloze:(.*?)\]/g, '{{c1::$1}}');
+      }
+    }
+    
+    return card;
+  });
+}
+
 // Generate an Anki APKG file from flashcards
 async function generateAnkiPackage(deckName, flashcards) {
   try {
@@ -828,7 +949,7 @@ async function generateAnkiPackage(deckName, flashcards) {
     
     // Process all flashcards to extract and add media
     for (const card of flashcards) {
-      // Handle images in notes
+      // Handle images in notes - markdown syntax
       if (card.notes) {
         const imageMatches = card.notes.match(/!\[.*?\]\((.*?)\)/g) || [];
         
@@ -848,7 +969,39 @@ async function generateAnkiPackage(deckName, flashcards) {
               processedMediaFiles.add(imgPath);
               
               // Replace path in notes to use just the filename (Anki's media folder format)
-              card.notes = card.notes.replace(imgPath, filename);
+              card.notes = card.notes.replace(new RegExp(imgPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), filename);
+            }
+          }
+        }
+      }
+      
+      // Handle images in notes - HTML syntax
+      if (card.notes) {
+        const imgSrcMatches = card.notes.match(/<img\s+[^>]*src=["']([^"']+)["'][^>]*>/g) || [];
+        
+        for (const imgTag of imgSrcMatches) {
+          const srcMatch = imgTag.match(/src=["']([^"']+)["']/);
+          if (srcMatch && srcMatch[1]) {
+            const imgPath = srcMatch[1];
+            
+            if (!imgPath.startsWith('http') && !processedMediaFiles.has(imgPath)) {
+              // Extract filename from path
+              const filename = path.basename(imgPath);
+              
+              // Handle both relative and absolute paths
+              const fullImagePath = imgPath.startsWith('/') 
+                ? path.join(__dirname, 'public', imgPath)
+                : path.join(__dirname, 'public', imgPath);
+              
+              if (fs.existsSync(fullImagePath)) {
+                // Add the media file to the package
+                const imageData = fs.readFileSync(fullImagePath);
+                apkg.addMedia(filename, imageData);
+                processedMediaFiles.add(imgPath);
+                
+                // Replace path in notes to use just the filename
+                card.notes = card.notes.replace(new RegExp(imgPath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g'), filename);
+              }
             }
           }
         }
@@ -878,13 +1031,24 @@ async function generateAnkiPackage(deckName, flashcards) {
         ? card.tags.join(' ')
         : '';
       
+      // Check for cloze syntax in the card content
+      const hasClozeMarkers = (card.text && card.text.includes('{{c')) || 
+                             (card.answer && card.answer.includes('{{c'));
+
+      // Force card to be cloze type if it has cloze markers
+      if (hasClozeMarkers) {
+        card.type = 'cloze';
+      }
+      
+      // Format notes for Anki with minimal styling
+      const formattedNotes = formatNotesForAnki(card.notes || '');
+      
       if (card.type === 'cloze') {
         // Handle cloze deletion cards
-        // Make sure clozeText uses Anki's {{c1::text}} format
-        let clozeText = card.text;
+        let clozeText = card.text || '';
         
-        // Convert any other cloze format to Anki's format if needed
-        if (!clozeText.includes('{{c')) {
+        // Convert alternate cloze format if needed
+        if (clozeText.includes('[cloze:')) {
           clozeText = clozeText.replace(/\[cloze:(.*?)\]/g, '{{c1::$1}}');
         }
         
@@ -897,21 +1061,24 @@ async function generateAnkiPackage(deckName, flashcards) {
             modelName: 'Cloze', 
             fields: { 
               Text: clozeText, 
-              Extra: card.notes || '' 
+              Extra: formattedNotes
             } 
           }
         );
       } else {
         // Add standard question/answer cards with notes field
+        const frontText = card.question || '';
+        const backText = card.answer || '';
+        
         apkg.addCard(
-          card.question,
-          card.answer,
+          frontText,
+          backText,
           { 
             tags, 
             modelName: 'Basic', 
             fields: {
-              Front: card.question,
-              Back: card.answer + (card.notes ? `\n\n${card.notes}` : '')
+              Front: frontText,
+              Back: backText + (formattedNotes ? `<hr>${formattedNotes}` : '')
             }
           }
         );
