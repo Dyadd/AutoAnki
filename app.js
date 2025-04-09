@@ -1071,7 +1071,8 @@ async function generateAnkiPackage(deckName, flashcards) {
             const filename = path.basename(imgPath);
             
             // Get the full path to the image
-            const fullImagePath = path.join(__dirname, 'public', imgPath);
+            const relativeImgPath = imgPath.replace(/^\/+/, '');
+            const fullImagePath = path.join(__dirname, 'public', relativeImgPath);
             
             if (fs.existsSync(fullImagePath)) {
               // Add the media file to the package
