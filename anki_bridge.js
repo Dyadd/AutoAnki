@@ -22,7 +22,8 @@ async function generateAnkiPackage(options) {
       deckName,
       outputDir = path.join(__dirname, 'uploads'),
       mediaFolder = path.join(__dirname, 'public'),
-      pythonPath = 'python3', // or 'python' on Windows
+      // Use the Python from the virtual environment
+      pythonPath = '/opt/venv/bin/python',
       scriptPath = path.join(__dirname, 'scripts', 'anki_generator.py')
     } = options;
 
@@ -58,6 +59,20 @@ async function generateAnkiPackage(options) {
     console.log(`Starting Python Anki generation process for deck: ${deckName}`);
     console.log(`Input JSON: ${inputJsonPath}`);
     console.log(`Output APKG: ${outputApkgPath}`);
+    console.log(`Using Python executable: ${pythonPath}`);
+    console.log(`Script path: ${scriptPath}`);
+
+    // Make sure the script directory exists
+    const scriptDir = path.dirname(scriptPath);
+    if (!fs.existsSync(scriptDir)) {
+      fs.mkdirSync(scriptDir, { recursive: true });
+    }
+
+    // Make sure the script exists
+    if (!fs.existsSync(scriptPath)) {
+      console.error(`Python script not found at ${scriptPath}`);
+      throw new Error(`Python script not found at ${scriptPath}`);
+    }
 
     // Execute Python script as child process
     return new Promise((resolve, reject) => {
@@ -90,8 +105,13 @@ async function generateAnkiPackage(options) {
         
         try {
           // Clean up temp files
-          fs.unlinkSync(inputJsonPath);
-          fs.rmdirSync(tempDir, { recursive: true });
+          if (fs.existsSync(inputJsonPath)) {
+            fs.unlinkSync(inputJsonPath);
+          }
+          
+          if (fs.existsSync(tempDir)) {
+            fs.rmdirSync(tempDir, { recursive: true });
+          }
         } catch (cleanupError) {
           console.warn(`Cleanup error: ${cleanupError.message}`);
         }
@@ -104,6 +124,7 @@ async function generateAnkiPackage(options) {
             resolve(result);
           } catch (parseError) {
             console.error('Error parsing Python output:', parseError);
+            // Even if we can't parse the output, if the exit code is 0, assume success
             resolve({
               success: true,
               filename: path.basename(outputApkgPath),
@@ -116,14 +137,33 @@ async function generateAnkiPackage(options) {
             });
           }
         } else {
+          // Failed with a non-zero exit code
+          console.error('Python process failed:');
+          console.error(`STDOUT: ${stdoutData}`);
+          console.error(`STDERR: ${stderrData}`);
           reject(new Error(`Python process failed with code ${code}: ${stderrData}`));
         }
       });
 
-      // Handle process errors
+      // Handle process errors (like if Python executable not found)
       pythonProcess.on('error', (error) => {
         console.error(`Python process error: ${error.message}`);
         reject(error);
+      });
+
+      // Set a timeout in case the process hangs
+      const timeout = setTimeout(() => {
+        try {
+          pythonProcess.kill();
+        } catch (e) {
+          console.error('Failed to kill Python process:', e);
+        }
+        reject(new Error('Python process timed out after 5 minutes'));
+      }, 5 * 60 * 1000); // 5 minute timeout
+
+      // Clear timeout when process ends
+      pythonProcess.on('close', () => {
+        clearTimeout(timeout);
       });
     });
   } catch (error) {

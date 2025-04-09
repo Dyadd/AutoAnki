@@ -31,22 +31,23 @@ COPY . .
 # Final stage for app image
 FROM base
 
-# Install Python and pip in the final stage
+# Install Python and prerequisites for virtual environment
 RUN apt-get update -qq && \
-    apt-get install --no-install-recommends -y python3 python3-pip python-is-python3 && \
+    apt-get install --no-install-recommends -y python3 python3-venv python3-pip python-is-python3 && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Install genanki package
-RUN pip3 install genanki
+# Create a Python virtual environment
+RUN python3 -m venv /opt/venv
+
+# Install genanki in the virtual environment
+RUN /opt/venv/bin/pip install genanki
 
 # Copy built application
 COPY --from=build /app /app
 
-# Ensure directories exist and script is executable
-RUN mkdir -p /app/uploads /app/public/images /app/scripts && \
-    touch /app/scripts/anki_generator.py && \
-    chmod +x /app/scripts/anki_generator.py
+# Create necessary directories
+RUN mkdir -p /app/uploads /app/public/images /app/scripts
 
 # Start the server by default, this can be overwritten at runtime
 EXPOSE 3000
