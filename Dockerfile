@@ -31,8 +31,22 @@ COPY . .
 # Final stage for app image
 FROM base
 
+# Install Python and pip in the final stage
+RUN apt-get update -qq && \
+    apt-get install --no-install-recommends -y python3 python3-pip python-is-python3 && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install genanki package
+RUN pip3 install genanki
+
 # Copy built application
 COPY --from=build /app /app
+
+# Ensure directories exist and script is executable
+RUN mkdir -p /app/uploads /app/public/images /app/scripts && \
+    touch /app/scripts/anki_generator.py && \
+    chmod +x /app/scripts/anki_generator.py
 
 # Start the server by default, this can be overwritten at runtime
 EXPOSE 3000

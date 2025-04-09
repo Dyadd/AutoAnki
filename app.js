@@ -12,6 +12,8 @@ const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
+const ankiBridge = require('./anki_bridge');
+
 // Load environment variables
 dotenv.config();
 
@@ -1456,7 +1458,7 @@ app.post('/api/anki/generate', ensureAuthenticated, async (req, res) => {
   }
 });
 
-// Stream version of the Anki generation endpoint
+// Replace your existing '/api/anki/generate/stream' endpoint with this one
 app.get('/api/anki/generate/stream', ensureAuthenticated, async (req, res) => {
   try {
     const { sectionId, sectionName } = req.query;
@@ -1501,6 +1503,7 @@ app.get('/api/anki/generate/stream', ensureAuthenticated, async (req, res) => {
     let currentPage = 0;
     const totalPages = pageIds.length;
     let allFlashcards = [];
+    let allImages = [];
     let totalCardCount = 0;
     
     // Initial progress update
@@ -1540,6 +1543,9 @@ app.get('/api/anki/generate/stream', ensureAuthenticated, async (req, res) => {
         const processedImages = preferences.processImages ? 
           await processImagesWithAI(extractedContent.images, pageTitle) :
           extractedContent.images.map(img => ({ ...img, analysis: '', potentialQuestions: [] }));
+        
+        // Track all images for Anki generation
+        allImages = [...allImages, ...processedImages];
         
         // Generate concept map
         sendProgress('generating_map', Math.floor((currentPage - 0.2) / totalPages * 100), 
@@ -1603,27 +1609,59 @@ app.get('/api/anki/generate/stream', ensureAuthenticated, async (req, res) => {
     
     const deckName = `${sectionName.replace(/[^a-zA-Z0-9 ]/g, '')}_${new Date().toISOString().split('T')[0]}`;
     
-    // Generate Anki package
-    const { filePath, filename } = await generateAnkiPackage(deckName, allFlashcards);
-    
-    // Return download URL
-    const downloadUrl = `/download/${filename}`;
-    
-    sendProgress('complete', 100, 'Deck generation complete!');
-    
-    // Send final response
-    res.write(`data: ${JSON.stringify({
-      complete: true,
-      success: true,
-      totalPages,
-      totalCards: allFlashcards.length,
-      downloadUrl,
-      deckName
-    })}\n\n`);
-    
-    res.end();
+    try {
+      // Prepare data for Python script
+      const preparedCards = ankiBridge.prepareCardsForAnki(allFlashcards, allImages);
+      const preparedImages = ankiBridge.prepareImagesForAnki(allImages);
+      
+      // Generate Anki package using Python bridge
+      const result = await ankiBridge.generateAnkiPackage({
+        cards: preparedCards,
+        images: preparedImages,
+        deckName: deckName,
+        outputDir: UPLOADS_DIR,
+        mediaFolder: path.join(__dirname, 'public')
+      });
+      
+      // Return download URL
+      const downloadUrl = `/download/${result.filename}`;
+      
+      // Send final card count message
+      const clozeCount = result.stats.cloze || 0;
+      const standardCount = result.stats.standard || 0;
+      
+      sendProgress('complete', 100, 
+        `Deck generation complete! Created ${clozeCount} cloze cards and ${standardCount} standard cards.`);
+      
+      // Send final response
+      res.write(`data: ${JSON.stringify({
+        complete: true,
+        success: true,
+        totalPages,
+        totalCards: clozeCount + standardCount,
+        downloadUrl,
+        deckName,
+        statistics: {
+          cloze: clozeCount,
+          standard: standardCount,
+          error: result.stats.error || 0
+        }
+      })}\n\n`);
+      
+      res.end();
+    } catch (error) {
+      console.error('Error generating Anki package:', error);
+      sendProgress('error', 100, `Error generating Anki package: ${error.message}`);
+      
+      res.write(`data: ${JSON.stringify({
+        error: 'Failed to generate Anki deck',
+        complete: true
+      })}\n\n`);
+      
+      res.end();
+    }
   } catch (error) {
-    console.error('Error generating Anki deck:', error);
+    console.error('Error in anki generation stream:', error);
     res.write(`data: ${JSON.stringify({
       error: 'Failed to generate Anki deck',
       complete: true
@@ -1631,6 +1669,7 @@ app.get('/api/anki/generate/stream', ensureAuthenticated, async (req, res) => {
     res.end();
   }
 });
+
 
 // Download route for Anki files
 app.get('/download/:filename', (req, res) => {

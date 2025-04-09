@@ -767,7 +767,7 @@ async function generateAnkiDeck() {
 }
 
 // Show download notification with button
-function showDownloadNotification(downloadUrl, deckName, totalCards) {
+function showDownloadNotification(downloadUrl, deckName, totalCards, statistics = null) {
   // Create or get notification container
   let container = document.getElementById('download-notification');
 
@@ -778,6 +778,26 @@ function showDownloadNotification(downloadUrl, deckName, totalCards) {
     document.body.appendChild(container);
   }
 
+  // Format card statistics if available
+  let statsHtml = '';
+  if (statistics) {
+    statsHtml = `
+    <div class="download-stats">
+      <div class="download-stat-item">
+        <div class="download-stat-value">${statistics.cloze || 0}</div>
+        <div class="download-stat-label">Cloze Cards</div>
+      </div>
+      <div class="download-stat-item">
+        <div class="download-stat-value">${statistics.standard || 0}</div>
+        <div class="download-stat-label">Standard Cards</div>
+      </div>
+      <div class="download-stat-item">
+        <div class="download-stat-value">${totalCards}</div>
+        <div class="download-stat-label">Total Cards</div>
+      </div>
+    </div>`;
+  }
+
   // Set content
   container.innerHTML = `
     <div class="download-notification-content">
@@ -785,14 +805,15 @@ function showDownloadNotification(downloadUrl, deckName, totalCards) {
         <h5><i class="bi bi-check-circle-fill text-success me-2"></i>Deck Generated Successfully</h5>
         <button class="close-button">&times;</button>
       </div>
-      <p>Your Anki deck "${deckName}" with ${totalCards} cards is ready to download.</p>
+      <p>Your Anki deck "${deckName}" is ready to download.</p>
+      ${statsHtml}
       <div class="download-notification-actions">
         <a href="${downloadUrl}" class="btn btn-primary" download="${deckName}.apkg">
           <i class="bi bi-download me-1"></i>Download Deck
         </a>
       </div>
       <p class="small text-muted mt-2">After downloading, open the file with Anki to import the deck.</p>
-      <p class="small text-muted">The deck includes cloze deletions, standard cards, and key concept maps.</p>
+      <p class="small text-muted">The deck includes ${statistics?.cloze || ''} cloze deletion cards with concept maps.</p>
     </div>
   `;
 
